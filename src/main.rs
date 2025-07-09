@@ -190,7 +190,7 @@ fn main() {
             //rest: (Var(1) >> Bot) >> -Var(1),
             //rest: Var(1) >> (Var(2) >> (Var(1) * Var(2))),
             // rest: (Var(1) >> (Var(2) >> Var(3)) ) >> ((Var(1) >> Var(2)) >> (Var(1) >> Var(3))),
-            //max_free_var: 2,
+            max_free_var: 2,
         },
         0,
                     0,
@@ -220,8 +220,8 @@ fn main() {
             }   
         }
         println!("depth: {}", depth);
-        println!("Continue attempting proof?");
-        std::io::stdin().read_line(&mut "".to_string());
+        //println!("Continue attempting proof?");
+        //std::io::stdin().read_line(&mut "".to_string());
 
         
         if proof_tree.nodes[0].is_proven() {
