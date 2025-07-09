@@ -24,12 +24,20 @@ struct Node {
     possible_subproofs: Vec<Rule>, //children
     data: Sequent,
     state: NodeState,
-    depth: u32, // instead of tracking how many branches depend on the proof we can recursively check parents. itll be easier
+    gendepth: u32, 
+    depth:u32,
+    next_expansion:u32,
 }
 
 impl Node {
     fn is_proven(&self)->bool {
-        if let NodeState::ProvenBy(_) = self.state {true} else {false}
+        matches!(self.state, NodeState::ProvenBy(_))
+    }
+    fn is_redundant(&self)->bool {
+        matches!(self.state, NodeState::Redundant)
+    }
+    fn is_unproved(&self)->bool {
+        matches!(self.state, NodeState::RequiredBy(_))
     }
 }
 
@@ -83,6 +91,14 @@ struct BannedRules {
     negNegE:bool,
     PBC:bool,
 }
+
+#[derive(Default)]
+struct ProofGenSettings {
+    disable_bot_generation:bool,
+    disable_bot_in_context:bool, // unimplemented
+    disable_free_variable_generation:bool,
+}
+
 
 impl IntoIterator for Rule {
     type Item = NodeID;
@@ -143,7 +159,7 @@ fn main() {
 
 
     let mut rmap = BTreeMap::new();
-    let res: Vec<_> = Formula::gen_of_size(1, 5, &mut rmap, false)
+    let res: Vec<_> = Formula::gen_of_size(1, 5, &mut rmap, false, false)
         .into_iter()
         .map(|(a, _)| a)
         .collect();
@@ -153,23 +169,35 @@ fn main() {
     let mut proof_tree = ProofSearchTree {
         nodes: vec![],
         sequents: BTreeMap::new(),
-        banned_rules: BannedRules{PBC:true, negNegE:true, LEM:true, ..Default::default()}
+        banned_rules: BannedRules{PBC:true, negNegE:true, LEM:true, botE:true,  ..Default::default()},
+        settings: ProofGenSettings { disable_bot_generation: true, disable_bot_in_context: true, disable_free_variable_generation: true }
+        //banned_rules: BannedRules{PBC:true, negNegE:true, LEM:true, botE:true, ..Default::default()}
         //banned_rules: BannedRules { ax: false, andE1: false, andE2: false, andI: true, impI: false, impE: true, orI1: true, orI2: true, orE: true, botE: true, negE: true, negI: true, negNegI: true, MT: true, LEM: true, negNegE: true, PBC: true }
     };
+    
     proof_tree.add_node(
         0,
         0,
         Sequent {
             context: BTreeSet::new(),
             //rest: (Var(1)) >> (--Var(1)),
+            //rest: (Var(1) >> Var(2)) >> (-Var(2) >> -Var(1)),
+            //rest: -(Var(1) + Var(2)) >> (-Var(1) * -Var(2)),
+            //rest: (-Var(1) * -Var(2)) >> -(Var(1) + Var(2)),
+            rest: (Var(1) * Var(2)) >> (Var(2) * Var(1)),
+            //rest: (---Var(1)) >> (-Var(1)),
             //rest: (Var(1) * Var(2)) >> (Var(1) >> Var(2)),
             //rest: (Var(1) >> Bot) >> -Var(1),
-            rest: Var(1) >> (Var(2) >> (Var(1) * Var(2))),
-            max_free_var: 1,
+            //rest: Var(1) >> (Var(2) >> (Var(1) * Var(2))),
+            // rest: (Var(1) >> (Var(2) >> Var(3)) ) >> ((Var(1) >> Var(2)) >> (Var(1) >> Var(3))),
+            //max_free_var: 2,
         },
         0,
+                    0,
     );
     
+    // todo heuristics based on depth, gendepth, node size, DFSish
+    // like for example find the smallest set of unproved formulas sufficient for a proof, bfs over each of those. 
     
     let mut depth = 0;
     while !proof_tree.nodes[0].is_proven() {
@@ -178,8 +206,9 @@ fn main() {
         loop {
             let mut nodes = vec![];
             for node in &mut proof_tree.nodes {
-                nodes.push(node.id);
-                println!("      {}", node.data)
+                if node.is_unproved() {
+                    nodes.push(node.id);
+                }
             }
             for nodeid in nodes {
                 proof_tree.extend_by_into(0,nodeid);
@@ -189,12 +218,11 @@ fn main() {
             } else {
                 prev_node_count = proof_tree.nodes.len()
             }   
-            println!("l{}", proof_tree.nodes.len());
-            //println!("   nongen");
-            std::io::stdin().read_line(&mut "".to_string());
         }
-        println!("d{}", depth);
-        
+        println!("depth: {}", depth);
+        println!("Continue attempting proof?");
+        std::io::stdin().read_line(&mut "".to_string());
+
         
         if proof_tree.nodes[0].is_proven() {
             break
@@ -202,7 +230,9 @@ fn main() {
         depth += 1;
         let mut nodes = vec![];
         for node in &mut proof_tree.nodes {
-            nodes.push((node.id, node.depth));
+            if node.is_unproved() {
+                nodes.push((node.id, node.gendepth));
+            }
         }
         for (nodeid,nodedepth) in nodes {
             if depth as i32 - nodedepth as i32 > 0 {
@@ -245,5 +275,18 @@ fn main() {
      B⊢A⇒B∧A     
     ----------⇒i
      ⊢A⇒B⇒A∧B   
+
+*/
+
+
+
+/*
+---A,A | A    ---A,A | -A
+----------- -e
+---A,A | T
+----------- -i
+---A | -A
+-----------=>i
+---A >> -A,
 
 */

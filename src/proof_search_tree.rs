@@ -3,13 +3,14 @@
 
     use itertools::Itertools;
 
-    use crate::{formula::Formula, sequent::Sequent, BannedRules, Node, NodeID, NodeState, Rule, RuleID};
+    use crate::{formula::Formula, sequent::Sequent, BannedRules, Node, NodeID, NodeState, ProofGenSettings, Rule, RuleID};
 
 
 pub struct ProofSearchTree {
     pub nodes: Vec<Node>,
     pub sequents: BTreeMap<Sequent, NodeID>,
     pub banned_rules : BannedRules,
+    pub settings : ProofGenSettings,
 }
 
 impl ProofSearchTree {
@@ -23,10 +24,11 @@ impl ProofSearchTree {
         parent: NodeID,
         rule: RuleID,
         data: Sequent,
+        parent_gendepth: u32,
         parent_depth: u32,
     ) -> Option<NodeID> {
         let data_normal = data.alpha_eq_normal_form();
-        println!("add_node: {} | {}", data, data_normal);
+        //println!("add_node: {} | {}", data, data_normal);
         use NodeState::*;
         if let Some(&nodeID) = self.sequents.get(&data_normal) {
             //println!("add_node: node exists");
@@ -50,7 +52,9 @@ impl ProofSearchTree {
                 data: data_normal.clone(),
                 state: NodeState::RequiredBy(1),
                 id: self.next_node_id(), // risky
+                gendepth: parent_gendepth,
                 depth: parent_depth + 1,
+                next_expansion: 0,
             });
             self.sequents.insert(data_normal, self.next_node_id() - 1);
             Some(self.next_node_id() - 1) // riskier
@@ -114,62 +118,114 @@ impl ProofSearchTree {
         &mut self.nodes[id]
     }
 
-    fn left_right_pad(instr:&mut String, exlen:usize) {
-        let n = (exlen + instr.len()) / 2;
-        *instr = format!("{instr: >n$}");
-        *instr = format!("{instr: <exlen$}");
+fn center_pad(s: &str, w: usize) -> String {
+    let len = Self::raw_len(s);
+    if w <= len {
+        return s.to_string();
     }
+    let total_pad = w - len;
+    let left = total_pad / 2;
+    let right = total_pad - left;
+    format!("{}{}{}", " ".repeat(left), s, " ".repeat(right))
+}
 
-    fn gen_proof_rule0(btm:String, rulename:&str)->Vec<String>{
-        let mut btm = btm;
-        let mut line = "-".repeat(btm.chars().count());
-        line += rulename;
-        btm += &" ".repeat(rulename.chars().count()+1);
-        vec![line,btm]
-    }
+/// Count chars excluding surrounding spaces
+fn raw_len(s: &str) -> usize {
+    s.chars().count()
+}
 
-    fn gen_proof_rule1(btm:String, rulename:&str, nid1P:Vec<String>)->Vec<String>{
-        let mut btm= btm;
-        let mut prev = nid1P;
-        let fraclen = max(prev[0].chars().count(), btm.chars().count());
-        let mut line = "-".repeat(fraclen);
-        btm += &" ".repeat(rulename.chars().count()+1);
-        Self::left_right_pad(&mut btm, fraclen);
-        prev.iter_mut().for_each(|f|Self::left_right_pad(f, fraclen));
-        line += rulename;
-        prev.iter_mut().for_each(|f|*f+=&" ".repeat(rulename.chars().count()));
-        prev.push(line);
-        prev.push(btm);
-        prev
-    }
+fn gen_proof_rule0(btm: String, rulename: &str) -> Vec<String> {
+    let width = Self::raw_len(&btm);
+    let line = format!("{}{}", "-".repeat(width), rulename);
+    vec![line, btm.to_string()+&" ".repeat(Self::raw_len(rulename))]
+}
 
-    fn gen_proof_rule2(btm:String, rulename:&str, nid1P:Vec<String>, nid2:Vec<String>)->Vec<String>{
-        let mut btm = btm;
-        let mut prev1 = nid1P;
-        let mut prev2 = nid2;
-        let fraclen = max(prev1[0].chars().count() + prev2[0].chars().count(), btm.chars().count());
-        let mut line = "-".repeat(fraclen);
-        let diffprevs = prev1.len() as i32 - (prev2.len() as i32);
-        if diffprevs > 0 {
-            for i in 0..diffprevs {
-                prev2.insert(0, "-".repeat(prev2[0].chars().count()));
-            }
-        } else {
-            for i in 0..-diffprevs {
-                prev1.insert(0, "-".repeat(prev1[0].chars().count()));
-            }
+fn gen_proof_rule1(btm: String, rulename: &str, mut prev: Vec<String>) -> Vec<String> {
+    let child_w = Self::raw_len(&prev[0]);
+    let concl_w = Self::raw_len(&btm);
+    let width = max(child_w, concl_w);
+    let line = format!("{}{}", "-".repeat(width), rulename);
+    prev.iter_mut().for_each(|f| *f = Self::center_pad(f, width) + &" ".repeat(Self::raw_len(rulename)));
+    let btm = Self::center_pad(&btm, width) + &" ".repeat(Self::raw_len(rulename));
+    let mut result = prev;
+    result.push(line);
+    result.push(btm);
+    result
+}
+
+fn gen_proof_rule2(
+    btm: String,
+    rulename: &str,
+    mut left: Vec<String>,
+    mut right: Vec<String>,
+) -> Vec<String> {
+    let lw = Self::raw_len(&left[0]);
+    let rw = Self::raw_len(&right[0]);
+    let frac_children = lw + rw + 1;
+    let concl_w = Self::raw_len(&btm);
+    let width = max(frac_children, concl_w);
+    // align heights by inserting blank lines at top
+    let lh = left.len();
+    let rh = right.len();
+    if lh < rh {
+        let blank = " ".repeat(lw);
+        for _ in 0..(rh - lh) {
+            left.insert(0, blank.clone());
         }
-        prev1.iter_mut().zip(prev2.iter()).for_each(|(p1,p2)|*p1+=p2);
-        btm += &" ".repeat(rulename.chars().count()+1);
-        Self::left_right_pad(&mut btm, fraclen);
-        prev1.iter_mut().for_each(|f|Self::left_right_pad(f, fraclen));
-        line += rulename;
-        prev1.iter_mut().for_each(|f|*f+=&" ".repeat(rulename.chars().count()));
-        prev1.push(line);
-        prev1.push(btm);
-        prev1
+    } else if rh < lh {
+        let blank = " ".repeat(rw);
+        for _ in 0..(lh - rh) {
+            right.insert(0, blank.clone());
+        }
     }
+    // merge and center to total width
+    let mut merged: Vec<String> = left
+        .into_iter()
+        .zip(right.into_iter())
+        .map(|(l, r)| l + " "+  &r + &" ".repeat(Self::raw_len(rulename)))
+        .collect();
+    let btm = Self::center_pad(&btm, width) + &" ".repeat(Self::raw_len(rulename));
+    let line = format!("{}{}", "-".repeat(width), rulename);
+    merged.push(line);
+    merged.push(btm);
+    merged
+}
 
+fn gen_proof_rule3(
+    btm: String,
+    rulename: &str,
+    mut a: Vec<String>,
+    mut b: Vec<String>,
+    mut c: Vec<String>,
+) -> Vec<String> {
+    let aw = Self::raw_len(&a[0]);
+    let bw = Self::raw_len(&b[0]);
+    let cw = Self::raw_len(&c[0]);
+    let frac_children = aw + bw + cw;
+    let concl_w = Self::raw_len(&btm);
+    let width = max(frac_children, concl_w);
+    // pad individual widths
+    a.iter_mut().for_each(|f| *f = Self::center_pad(f, aw));
+    b.iter_mut().for_each(|f| *f = Self::center_pad(f, bw));
+    c.iter_mut().for_each(|f| *f = Self::center_pad(f, cw));
+    // align heights
+    let h = *[a.len(), b.len(), c.len()].iter().max().unwrap();
+    let blank_a = " ".repeat(aw);
+    let blank_b = " ".repeat(bw);
+    let blank_c = " ".repeat(cw);
+    while a.len() < h { a.insert(0, blank_a.clone()); }
+    while b.len() < h { b.insert(0, blank_b.clone()); }
+    while c.len() < h { c.insert(0, blank_c.clone()); }
+    // merge
+    let mut merged: Vec<String> = (0..h)
+        .map(|i| Self::center_pad(&(a[i].clone() + &b[i] + &c[i]), width))
+        .collect();
+    let btm = Self::center_pad(&btm, width);
+    let line = format!("{}{}", "-".repeat(width), rulename);
+    merged.push(line);
+    merged.push(btm);
+    merged
+}
 
     pub fn get_proof(&mut self, id:NodeID)->Vec<String> {
         let seq = self.get_node(id).data.to_string();
@@ -216,8 +272,13 @@ impl ProofSearchTree {
 
     pub fn extend_by_into(&mut self, amount: u32, innodeid:NodeID) -> bool {
         use Formula::*;
+        if ! matches!(self.get_node(innodeid).state, NodeState::RequiredBy(_)){
+            return false
+        }
         let mut addedNodes = vec![];
+        self.get_node(innodeid).next_expansion = amount + 1;
         let innode = self.get_node(innodeid).clone();
+        let mut newdepth =  innode.gendepth;
         if amount == 0 {
             if innode.data.context.contains(&innode.data.rest) && !self.banned_rules.ax {
                 self.get_node(innodeid).possible_subproofs.push(Rule::Ax);
@@ -237,6 +298,7 @@ impl ProofSearchTree {
                         rest: Bot,
                         max_free_var: innode.data.max_free_var,
                     },
+                    newdepth,
                     innode.depth,
                 );
                 if let Some(x) = new_node {
@@ -254,6 +316,7 @@ impl ProofSearchTree {
                         rest: Bot,
                         max_free_var: innode.data.max_free_var,
                     },
+                    newdepth,
                     innode.depth,
                 );
                 if let Some(x) = new_node {
@@ -271,6 +334,7 @@ impl ProofSearchTree {
                         rest: --innode.data.rest.clone(),
                         max_free_var: innode.data.max_free_var,
                     },
+                    newdepth,
                     innode.depth,
                 );
                 if let Some(x) = new_node {
@@ -293,7 +357,8 @@ impl ProofSearchTree {
                                 rest: Bot,
                                 max_free_var: innode.data.max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         if let Some(x) = new_node {
                             addedNodes.push(x);
@@ -311,7 +376,8 @@ impl ProofSearchTree {
                                     rest: *f1prime,
                                     max_free_var: innode.data.max_free_var,
                                 },
-                                innode.depth,
+                                newdepth,
+                    innode.depth,
                             );
                             if let Some(x) = new_node {
                                 addedNodes.push(x);
@@ -334,7 +400,8 @@ impl ProofSearchTree {
                                 rest: *f2,
                                 max_free_var: innode.data.max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         if let Some(x) = new_node {
                             addedNodes.push(x);
@@ -353,7 +420,8 @@ impl ProofSearchTree {
                                 rest: *f1.clone(),
                                 max_free_var: innode.data.max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         if let Some(x) = new_node {
                             addedNodes.push(x);
@@ -370,7 +438,8 @@ impl ProofSearchTree {
                                 rest: *f2.clone(),
                                 max_free_var: innode.data.max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         if let Some(x) = new_node {
                             addedNodes.push(x);
@@ -395,7 +464,8 @@ impl ProofSearchTree {
                                 rest: *f1,
                                 max_free_var: innode.data.max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         let rulenum = self.get_node(innodeid).possible_subproofs.len();
                         let new_node2 = self.add_node(
@@ -406,7 +476,8 @@ impl ProofSearchTree {
                                 rest: *f2,
                                 max_free_var: innode.data.max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         match (new_node1, new_node2) {
                             (None, None) => {}
@@ -424,8 +495,9 @@ impl ProofSearchTree {
                 _ => (),
             }
         } else {
+            newdepth += 1;
             let mut map = BTreeMap::new();
-            let formulae = Formula::gen_of_size(amount, innode.data.max_free_var, &mut map, false);
+            let formulae = Formula::gen_of_size(amount, innode.data.max_free_var, &mut map, self.settings.disable_bot_generation, self.settings.disable_free_variable_generation);
             for (genformula, max_free_var) in formulae {
                 if !self.banned_rules.andE1 {
                         let rulenum = self.get_node(innodeid).possible_subproofs.len();
@@ -437,7 +509,8 @@ impl ProofSearchTree {
                             rest: innode.data.rest.clone() * genformula.clone(),
                             max_free_var,
                         },
-                        innode.depth,
+                        newdepth,
+                    innode.depth,
                     );
                     if let Some(x) = new_node {
                         addedNodes.push(x);
@@ -454,7 +527,8 @@ impl ProofSearchTree {
                             rest: genformula.clone() * innode.data.rest.clone(),
                             max_free_var,
                         },
-                        innode.depth,
+                        newdepth,
+                    innode.depth,
                     );
                     if let Some(x) = new_node {
                         addedNodes.push(x);
@@ -471,7 +545,8 @@ impl ProofSearchTree {
                             rest: genformula.clone() >> innode.data.rest.clone(),
                             max_free_var,
                         },
-                        innode.depth,
+                        newdepth,
+                    innode.depth,
                     );
                     let rulenum = self.get_node(innodeid).possible_subproofs.len();
                     let new_node2 = self.add_node(
@@ -482,7 +557,8 @@ impl ProofSearchTree {
                             rest: genformula.clone(),
                             max_free_var,
                         },
-                        innode.depth,
+                        newdepth,
+                    innode.depth,
                     );
                     match (new_node1, new_node2) {
                         (None, None) => {}
@@ -508,7 +584,8 @@ impl ProofSearchTree {
                                     rest: genformula.clone(),
                                     max_free_var,
                                 },
-                                innode.depth,
+                                newdepth,
+                    innode.depth,
                             );
                             let rulenum = self.get_node(innodeid).possible_subproofs.len();
                             let new_node2 = self.add_node(
@@ -519,7 +596,8 @@ impl ProofSearchTree {
                                     rest: -genformula.clone(),
                                     max_free_var,
                                 },
-                                innode.depth,
+                                newdepth,
+                    innode.depth,
                             );
                             match (new_node1, new_node2) {
                                 (None, None) => {}
@@ -545,7 +623,8 @@ impl ProofSearchTree {
                                     rest: *f1 >> genformula.clone(),
                                     max_free_var,
                                 },
-                                innode.depth,
+                                newdepth,
+                    innode.depth,
                             );
                             let rulenum = self.get_node(innodeid).possible_subproofs.len();
                             let new_node2 = self.add_node(
@@ -556,7 +635,8 @@ impl ProofSearchTree {
                                     rest: -genformula.clone(),
                                     max_free_var,
                                 },
-                                innode.depth,
+                                newdepth,
+                    innode.depth,
                             );
                             match (new_node1, new_node2) {
                                 (None, None) => {}
@@ -587,7 +667,8 @@ impl ProofSearchTree {
                                 rest: *f1 + *f2,
                                 max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         let rulenum = self.get_node(innodeid).possible_subproofs.len();
                         let new_node2 = self.add_node(
@@ -598,7 +679,8 @@ impl ProofSearchTree {
                                 rest: innode.data.rest.clone(),
                                 max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
                         let rulenum = self.get_node(innodeid).possible_subproofs.len();
                         let new_node3 = self.add_node(
@@ -609,7 +691,8 @@ impl ProofSearchTree {
                                 rest: innode.data.rest.clone(),
                                 max_free_var,
                             },
-                            innode.depth,
+                            newdepth,
+                    innode.depth,
                         );
 
                         match (new_node1, new_node2, new_node3) {

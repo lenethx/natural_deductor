@@ -95,6 +95,7 @@ impl Formula {
         max_free_var: u32,
         gen_of_size_map: &mut BTreeMap<(u32, u32), Vec<(Formula, u32)>>,
         disable_bot: bool,
+        disable_newvars:bool,
     ) -> Vec<(Formula, u32)> {
         if let Some(res) = gen_of_size_map.get(&(size, max_free_var)) {
             return res.clone();
@@ -102,27 +103,28 @@ impl Formula {
 
         let mut res = vec![];
         if size == 1 {
-            if disable_bot {
-            } else {
+            if !disable_bot {
                 res.push((Formula::Bot, max_free_var))
             }; //todo with std::mem::discriminant so i can pass list to ignore
             for i in 1..=max_free_var {
                 res.push((Formula::Var(i), max_free_var));
             }
-            res.push((Formula::Var(max_free_var + 1), max_free_var + 1))
+            if !disable_newvars {
+                res.push((Formula::Var(max_free_var + 1), max_free_var + 1))
+            }
         } else {
             res.extend(
-                Formula::gen_of_size(size - 1, max_free_var, gen_of_size_map, disable_bot)
+                Formula::gen_of_size(size - 1, max_free_var, gen_of_size_map, disable_bot, disable_newvars)
                     .into_iter()
                     .map(|(a, b)| (-a, b)),
             );
 
             for i in 1..size {
                 let left_formulae =
-                    Formula::gen_of_size(i, max_free_var, gen_of_size_map, disable_bot);
+                    Formula::gen_of_size(i, max_free_var, gen_of_size_map, disable_bot, disable_newvars);
                 for (l_formula, max_free_var) in left_formulae.into_iter() {
                     let right_formulae =
-                        Formula::gen_of_size(size - i, max_free_var, gen_of_size_map, disable_bot);
+                        Formula::gen_of_size(size - i, max_free_var, gen_of_size_map, disable_bot, disable_newvars);
                     for (r_formula, max_free_var) in right_formulae {
                         res.push((l_formula.clone() + r_formula.clone(), max_free_var));
                         res.push((l_formula.clone() * r_formula.clone(), max_free_var));
