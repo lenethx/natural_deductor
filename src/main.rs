@@ -1,7 +1,7 @@
 use formula::Formula;
 use core::panic;
 use std::{
-    cmp::max, collections::{BTreeMap, BTreeSet, HashSet}, default, f32::consts::E, iter::Product, ops::{Add, Deref, Index, Mul, Neg, Shr}
+    cmp::{max, min}, collections::{BTreeMap, BTreeSet, HashSet}, default, f32::consts::E, iter::Product, ops::{Add, Deref, Index, Mul, Neg, Shr}
 };
 mod formula; // WHAT????
 use itertools::Itertools;
@@ -184,13 +184,14 @@ fn main() {
             //rest: (Var(1) >> Var(2)) >> (-Var(2) >> -Var(1)),
             //rest: -(Var(1) + Var(2)) >> (-Var(1) * -Var(2)),
             //rest: (-Var(1) * -Var(2)) >> -(Var(1) + Var(2)),
-            rest: (Var(1) * Var(2)) >> (Var(2) * Var(1)),
+           // rest: (Var(1) * Var(2)) >> (Var(2) * Var(1)),
             //rest: (---Var(1)) >> (-Var(1)),
             //rest: (Var(1) * Var(2)) >> (Var(1) >> Var(2)),
             //rest: (Var(1) >> Bot) >> -Var(1),
             //rest: Var(1) >> (Var(2) >> (Var(1) * Var(2))),
             // rest: (Var(1) >> (Var(2) >> Var(3)) ) >> ((Var(1) >> Var(2)) >> (Var(1) >> Var(3))),
-            max_free_var: 2,
+            rest:Var(1) >> ((Var(2) + (Var(1) >> Var(3) )) >> (Var(2) + Var(3) ))    ,
+            max_free_var: 3,
         },
         0,
                     0,
@@ -219,7 +220,7 @@ fn main() {
                 prev_node_count = proof_tree.nodes.len()
             }   
         }
-        println!("depth: {}", depth);
+        println!("depth: {} nodes: {}", depth, proof_tree.nodes.len());
         //println!("Continue attempting proof?");
         //std::io::stdin().read_line(&mut "".to_string());
 
@@ -231,12 +232,12 @@ fn main() {
         let mut nodes = vec![];
         for node in &mut proof_tree.nodes {
             if node.is_unproved() {
-                nodes.push((node.id, node.gendepth));
+                nodes.push((node.id, node.next_expansion));
             }
         }
         for (nodeid,nodedepth) in nodes {
-            if depth as i32 - nodedepth as i32 > 0 {
-                proof_tree.extend_by_into(depth - nodedepth,nodeid ); 
+            if depth as i32 > nodedepth as i32 {
+                proof_tree.extend_by_into(min(depth, nodedepth),nodeid ); 
                 if proof_tree.nodes[0].is_proven() {
                     break
                 }

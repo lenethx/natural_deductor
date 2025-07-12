@@ -153,7 +153,7 @@ fn gen_proof_rule1(btm: String, rulename: &str, mut prev: Vec<String>) -> Vec<St
     result
 }
 
-fn gen_proof_rule2(
+fn gen_proof_rule2( // todo bottom bigger than top case
     btm: String,
     rulename: &str,
     mut left: Vec<String>,
@@ -201,13 +201,10 @@ fn gen_proof_rule3(
     let aw = Self::raw_len(&a[0]);
     let bw = Self::raw_len(&b[0]);
     let cw = Self::raw_len(&c[0]);
-    let frac_children = aw + bw + cw;
+    let frac_children = aw + bw + cw + 2;
     let concl_w = Self::raw_len(&btm);
     let width = max(frac_children, concl_w);
     // pad individual widths
-    a.iter_mut().for_each(|f| *f = Self::center_pad(f, aw));
-    b.iter_mut().for_each(|f| *f = Self::center_pad(f, bw));
-    c.iter_mut().for_each(|f| *f = Self::center_pad(f, cw));
     // align heights
     let h = *[a.len(), b.len(), c.len()].iter().max().unwrap();
     let blank_a = " ".repeat(aw);
@@ -218,9 +215,9 @@ fn gen_proof_rule3(
     while c.len() < h { c.insert(0, blank_c.clone()); }
     // merge
     let mut merged: Vec<String> = (0..h)
-        .map(|i| Self::center_pad(&(a[i].clone() + &b[i] + &c[i]), width))
+        .map(|i| (a[i].clone() + " " + &b[i] + " " + &c[i] + &" ".repeat(Self::raw_len(rulename))))
         .collect();
-    let btm = Self::center_pad(&btm, width);
+    let btm = Self::center_pad(&btm, width) + &" ".repeat(Self::raw_len(rulename));
     let line = format!("{}{}", "-".repeat(width), rulename);
     merged.push(line);
     merged.push(btm);
@@ -247,7 +244,8 @@ fn gen_proof_rule3(
                     Self::gen_proof_rule1(seq, "∨i1", self.get_proof(nid1)),
                 Rule::OrI2(nid1) => 
                     Self::gen_proof_rule1(seq, "∨i2", self.get_proof(nid1)),
-                Rule::OrE(nid1, nid2, nid3) => todo!(),
+                Rule::OrE(nid1, nid2, nid3) => 
+                    Self::gen_proof_rule3(seq, "∨e", self.get_proof(nid1), self.get_proof(nid2), self.get_proof(nid3)),
                 Rule::BotE(nid1) => 
                     Self::gen_proof_rule1(seq, "⊥e", self.get_proof(nid1)),
                 Rule::NegE(nid1, nid2) => 
@@ -276,7 +274,7 @@ fn gen_proof_rule3(
             return false
         }
         let mut addedNodes = vec![];
-        self.get_node(innodeid).next_expansion = amount + 1;
+        self.get_node(innodeid).next_expansion = max(amount + 1, self.get_node(innodeid).next_expansion);
         let innode = self.get_node(innodeid).clone();
         let mut newdepth =  innode.gendepth;
         if amount == 0 {
