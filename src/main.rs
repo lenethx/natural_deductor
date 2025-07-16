@@ -1,7 +1,7 @@
 use formula::Formula;
 use core::panic;
 use std::{
-    cmp::{max, min}, collections::{BTreeMap, BTreeSet, HashSet}, default, f32::consts::E, iter::Product, ops::{Add, Deref, Index, Mul, Neg, Shr}
+    cmp::{max, min}, collections::{BTreeMap, BTreeSet, HashMap, HashSet}, default, f32::consts::E, iter::Product, ops::{Add, Deref, Index, Mul, Neg, Shr}
 };
 mod formula; // WHAT????
 use itertools::Itertools;
@@ -168,7 +168,7 @@ fn main() {
 
     let mut proof_tree = ProofSearchTree {
         nodes: vec![],
-        sequents: BTreeMap::new(),
+        sequents: HashMap::new(),
         banned_rules: BannedRules{PBC:true, negNegE:true, LEM:true, botE:true,  ..Default::default()},
         settings: ProofGenSettings { disable_bot_generation: true, disable_bot_in_context: true, disable_free_variable_generation: true }
         //banned_rules: BannedRules{PBC:true, negNegE:true, LEM:true, botE:true, ..Default::default()}

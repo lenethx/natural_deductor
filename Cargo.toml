@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 itertools = "0.14.0"
+
+[profile.release]
+debug = true
+strip = false

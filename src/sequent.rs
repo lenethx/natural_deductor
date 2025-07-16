@@ -5,7 +5,7 @@ use itertools::Itertools;
 use crate::formula::Formula;
 
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct Sequent {
     pub context: BTreeSet<Formula>,
     pub rest: Formula,
@@ -17,14 +17,7 @@ impl Sequent {
         // todo DPLL maybe?
         let mut free_vars = vec![];
         for formula in self.context.iter().chain(vec![&self.rest].into_iter()) {
-            formula.fold(
-                (),
-                &mut |v| free_vars.push(v),
-                &|_| (),
-                &|_, _| (),
-                &|_, _| (),
-                &|_, _| (),
-            )
+            free_vars.extend(formula.get_free_vars().into_iter());
         } // probably not good
         free_vars = free_vars.into_iter().unique().collect();
         let mut valid_combinations: Vec<u32> = vec![];

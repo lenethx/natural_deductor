@@ -1,13 +1,13 @@
 use core::panic;
 use std::{
     cmp::Ordering,
-    collections::BTreeMap,
+    collections::{self, BTreeMap},
     fmt::write,
     ops::{Add, Deref, Mul, Neg, Shr},
 };
 
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum Formula {
     Bot,
     Neg(Box<Self>),
@@ -271,28 +271,26 @@ impl Formula {
         }
     }
 
-    fn get_free_vars(&self) -> Vec<u32> {
-        // again this is terrible. atrocious code.
-        match self {
-            Formula::Bot => vec![],
-            Formula::Neg(f1) => f1.get_free_vars(),
-            Formula::Imp(f1, f2) => {
-                let mut f1arr = f1.get_free_vars();
-                f1arr.append(&mut f2.get_free_vars());
-                f1arr
-            }
-            Formula::And(f1, f2) => {
-                let mut f1arr = f1.get_free_vars();
-                f1arr.append(&mut f2.get_free_vars());
-                f1arr
-            }
-            Formula::Or(f1, f2) => {
-                let mut f1arr = f1.get_free_vars();
-                f1arr.append(&mut f2.get_free_vars());
-                f1arr
-            }
-            Formula::Var(val) => vec![*val],
+    pub fn get_free_vars(&self) -> Vec<u32> {
+        let mut formulas_to_check = collections::VecDeque::new();
+        formulas_to_check.push_front(self);
+        let mut free_vars = vec![];
+        while let Some(form) = formulas_to_check.pop_front(){
+            match form {
+                Formula::Bot => (),
+                Formula::Neg(f1) => formulas_to_check.push_front(&f1),
+                Formula::Imp(f1, f2) |
+                Formula::And(f1, f2) | 
+                Formula::Or(f1, f2)
+                 => {
+                    formulas_to_check.push_front(&f2);
+                    formulas_to_check.push_front(&f1);
+                }
+                Formula::Var(val) => free_vars.push(*val),
+            };
         }
+        
+        free_vars
     }
 }
 

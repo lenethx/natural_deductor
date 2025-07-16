@@ -1,5 +1,5 @@
 
-    use std::{cmp::max, collections::{BTreeMap, BTreeSet}};
+    use std::{cmp::max, collections::{BTreeMap, BTreeSet, HashMap}};
 
     use itertools::Itertools;
 
@@ -8,7 +8,7 @@
 
 pub struct ProofSearchTree {
     pub nodes: Vec<Node>,
-    pub sequents: BTreeMap<Sequent, NodeID>,
+    pub sequents: HashMap<Sequent, NodeID>,
     pub banned_rules : BannedRules,
     pub settings : ProofGenSettings,
 }
