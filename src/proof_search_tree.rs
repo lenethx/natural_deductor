@@ -35,12 +35,13 @@ impl ProofSearchTree {
             let node = self.get_node(nodeID);
             match node.state {
                 Redundant => node.state = RequiredBy(1),
-                RequiredBy(n) => node.state = RequiredBy(n + 1),
+                RequiredBy(n) => node.state = RequiredBy(n + 1),//TODO MISSING ADD PARENT AND PROVE??
                 ProvenBy(_) => {}
             }
             Some(nodeID)
-        } else if !data.valid_nk_via_truth_tables() {
-            // These none values should probably also be in the btree uhh TODO?
+        } else if !data_normal.valid_nk_via_truth_tables() {
+            // These none values should probably also be in the btree uhh 
+            // i tried it and it was slower. 
             //println!("add_node: sequent false");
             None
         } else {
@@ -66,11 +67,19 @@ impl ProofSearchTree {
         if let NodeState::ProvenBy(_) = self.get_node(id).state {
             return;
         }
-        println!("mark_proved: proof reached in node {}!", self.get_node(id).data);
+        //println!("mark_proved: proof reached in node {}!", self.get_node(id).data);
         self.get_node(id).state = NodeState::ProvenBy(by);
         let parents: Vec<(NodeID, RuleID)> = self.get_node(id).parents.clone();
-        for (pnodeid, rule) in parents {
+        for (pnodeid, rule) in parents.clone()/*tmp*/ {
             let pnode = self.get_node(pnodeid);
+            //println!("{} {} {} {:?} {} {:?}", pnode.data, pnode.depth, pnode.gendepth, pnode.possible_subproofs, rule, parents);
+            if rule >= pnode.possible_subproofs.len(){
+                println!("{:?}", pnode.possible_subproofs);
+                for line in self.get_proof(id){
+                    println!("{}",line);
+                }
+                panic!();
+            }
             let crule = pnode.possible_subproofs[rule];
             let all_siblings_proven = crule.into_iter().fold(true, |acc, b| {
                 if let NodeState::ProvenBy(_) = self.get_node(b).state {acc} else {false}

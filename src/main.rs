@@ -50,7 +50,7 @@ enum NodeState {
 
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum Rule {
     Ax,
     AndE1(NodeID),
@@ -138,33 +138,7 @@ impl IntoIterator for Rule {
 
 fn main() {
     use Formula::*;
-    let formula_to_prove = Sequent {
-        context: BTreeSet::from_iter([-(Formula::Var(1) * Formula::Var(2))]),
-        rest: -Formula::Var(1) + -Formula::Var(2),
-        max_free_var: 2,
-    };
 
-    println!(
-        "Truth_value: {}",
-        formula_to_prove.valid_nk_via_truth_tables()
-    );
-
-    println!("eq is functioning: {:?}", (Var(1) >> Var(1)) == ((Var(1) >> Var(1))));
-    let mut testeqmap = BTreeSet::new();
-    testeqmap.insert(Var(1));
-    println!("eq is functioning: {:?}", (Sequent{ context: testeqmap.clone(), rest: Var(1), max_free_var: 1 }) ==  Sequent{ context: testeqmap.clone(), rest: Var(1), max_free_var: 1 });
-    let mut testbset = BTreeSet::new();
-    testbset.insert(Sequent{ context: testeqmap.clone(), rest: Var(1), max_free_var: 1 });
-    println!("{}", testbset.contains(&Sequent{ context: testeqmap.clone(), rest: Var(1), max_free_var: 1 }));
-
-
-    let mut rmap = BTreeMap::new();
-    let res: Vec<_> = Formula::gen_of_size(1, 5, &mut rmap, false, false)
-        .into_iter()
-        .map(|(a, _)| a)
-        .collect();
-
-    //println!("{:?}", res);
 
     let mut proof_tree = ProofSearchTree {
         nodes: vec![],
@@ -174,27 +148,31 @@ fn main() {
         //banned_rules: BannedRules{PBC:true, negNegE:true, LEM:true, botE:true, ..Default::default()}
         //banned_rules: BannedRules { ax: false, andE1: false, andE2: false, andI: true, impI: false, impE: true, orI1: true, orI2: true, orE: true, botE: true, negE: true, negI: true, negNegI: true, MT: true, LEM: true, negNegE: true, PBC: true }
     };
+
     
+    //rest: (Var(1)) >> (--Var(1)),
+    //rest: (Var(1) >> Var(2)) >> (-Var(2) >> -Var(1)),
+    //rest: -(Var(1) + Var(2)) >> (-Var(1) * -Var(2)),
+    //rest: (-Var(1) * -Var(2)) >> -(Var(1) + Var(2)),
+    // rest: (Var(1) * Var(2)) >> (Var(2) * Var(1)),
+    //rest: (---Var(1)) >> (-Var(1)),
+    //rest: (Var(1) * Var(2)) >> (Var(1) >> Var(2)),
+    //rest: (Var(1) >> Bot) >> -Var(1),
+    //rest: Var(1) >> (Var(2) >> (Var(1) * Var(2))),
+    // rest: ,
+    // this one breaks the program and pancis. not sure why (Var(1) >> (Var(2) >> Var(3)) ) >> ((Var(1) >> Var(2)) >> (Var(1) >> Var(3)))
+    let formula_to_prove =   Var(1) >> ((Var(2) + (Var(1) >> Var(3) )) >> (Var(2) + Var(3) ));
+
     proof_tree.add_node(
         0,
         0,
         Sequent {
             context: BTreeSet::new(),
-            //rest: (Var(1)) >> (--Var(1)),
-            //rest: (Var(1) >> Var(2)) >> (-Var(2) >> -Var(1)),
-            //rest: -(Var(1) + Var(2)) >> (-Var(1) * -Var(2)),
-            //rest: (-Var(1) * -Var(2)) >> -(Var(1) + Var(2)),
-           // rest: (Var(1) * Var(2)) >> (Var(2) * Var(1)),
-            //rest: (---Var(1)) >> (-Var(1)),
-            //rest: (Var(1) * Var(2)) >> (Var(1) >> Var(2)),
-            //rest: (Var(1) >> Bot) >> -Var(1),
-            //rest: Var(1) >> (Var(2) >> (Var(1) * Var(2))),
-            // rest: (Var(1) >> (Var(2) >> Var(3)) ) >> ((Var(1) >> Var(2)) >> (Var(1) >> Var(3))),
-            rest:Var(1) >> ((Var(2) + (Var(1) >> Var(3) )) >> (Var(2) + Var(3) ))    ,
-            max_free_var: 3,
+            max_free_var: *formula_to_prove.get_free_vars().iter().max().unwrap(),
+            rest: formula_to_prove
         },
         0,
-                    0,
+        0,
     );
     
     // todo heuristics based on depth, gendepth, node size, DFSish

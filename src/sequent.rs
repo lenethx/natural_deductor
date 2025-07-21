@@ -85,7 +85,7 @@ impl Sequent {
         todo!()
     }
 
-    pub fn alpha_eq_normal_form(&self) -> Self {
+    pub fn alpha_eq_normal_form(self) -> Self { 
         // this should work, theres no bound variables. mybe look for counterexample??
         let mut free_vars = BTreeMap::new();
         let mut max_free_var = 0;
@@ -95,7 +95,7 @@ impl Sequent {
         Sequent {
             context: self
                 .context
-                .iter()
+                .into_iter()
                 .map(|f| f.alpha_eq_normal_form(&mut free_vars, &mut max_free_var))
                 .collect(),
             rest: newres,
